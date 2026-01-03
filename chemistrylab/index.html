@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobil Virtual Laboratoriya</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            /* Mobil brauzerlarda "pull-to-refresh"ni to'xtatadi */
+            touch-action: none;
+        }
+
+        /* Info panel - Telefonning tepa qismiga moslangan */
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #00ffff;
+            padding: 10px 15px;
+            border-radius: 12px;
+            pointer-events: none;
+            z-index: 100;
+            font-size: 13px;
+            text-align: center;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Linklar konteyneri - Mobil ekranda pastga joylashtirildi */
+        .links-container {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        /* Tugmalar - Barmoq bilan bosishga qulay (Touch-friendly) */
+        .back-btn {
+            display: block;
+            width: 100%;
+            padding: 12px 0;
+            background: #4ecdc4;
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 14px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: transform 0.1s;
+            box-sizing: border-box;
+        }
+
+        /* Tugmani bosganda vizual effekt */
+        .back-btn:active {
+            transform: scale(0.97);
+            background: #45b7aa;
+        }
+
+        .secondary {
+            background: rgba(78, 205, 196, 0.9);
+        }
+
+        /* Planshet va Kattaroq ekranlar uchun moslash */
+        @media (min-width: 600px) {
+            .links-container {
+                width: 300px;
+                right: 15px;
+                left: auto;
+                bottom: 20px;
+            }
+            #info {
+                width: fit-content;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="info">
+        🧪 Labaratoriya <strong>jihozlari</strong> 
+    </div>
+
+    <div class="links-container">
+        <a href="indexlab.html" class="back-btn">Bosh sahifa</a>
+        <a href="moslash.html" class="back-btn secondary">Moslab topish</a>
+        <a href="kimyoelementlar.html" class="back-btn secondary">Molekulalar</a>
+        <a href="Mendeleyev.html" class="back-btn secondary">Mendeleyev jadvali</a>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.168.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.168.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module" src="main2.js"></script>
+
+</body>
+</html>

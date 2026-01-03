@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Kimyo Laboratoriyasi 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* UI Dizayni */
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(20, 20, 30, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            min-width: 250px;
+        }
+
+        h2 { margin: 0 0 15px 0; font-size: 18px; color: #00d2ff; }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            background: #2a2a35;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        select:hover { border-color: #00d2ff; }
+
+        #molecule-desc {
+            margin-top: 15px;
+            font-size: 13px;
+            color: #aaa;
+            line-height: 1.4;
+        }
+
+        /* Atomlar ustidagi yozuvlar */
+        .atom-label {
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 0 0 3px #000;
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+
+    <!-- Three.js kutubxonalarini CDN orqali ulash -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- Boshqaruv Paneli -->
+    <div id="ui-panel">
+        <h2>🧪 Molekula Konstruktori</h2>
+        <label for="molecule-select" style="font-size: 12px; color: #888;">Moddani tanlang:</label>
+        <select id="molecule-select"></select>
+        <div id="molecule-desc"></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // ==========================================
+        // 1. JSON MA'LUMOTLAR BAZASI
+        // ==========================================
+        // Bu yerda .pdb fayl shart emas. O'zimiz xohlagan moddani koordinata bilan yozamiz.
+        // atomlar: {element: "Belgi", pos: [x, y, z]}
+        // bonds (bog'lanishlar): [atom1_index, atom2_index]
+
+        const MOLECULES = {
+            "Suv (H2O)": {
+                desc: "Hayot manbai. Rangsiz va hidsiz suyuqlik. Vodorod bog'lanishi tufayli noyob xususiyatlarga ega.",
+                atoms: [
+                    { el: "O", pos: [0, 0, 0] },
+                    { el: "H", pos: [0.8, 0.6, 0] },
+                    { el: "H", pos: [-0.8, 0.6, 0] }
+                ],
+                bonds: [[0, 1], [0, 2]]
+            },
+            "Metan (CH4)": {
+                desc: "Eng oddiy uglevodorod. Tabiiy gazning asosiy tarkibiy qismi.",
+                atoms: [
+                    { el: "C", pos: [0, 0, 0] },
+                    { el: "H", pos: [0.63, 0.63, 0.63] },
+                    { el: "H", pos: [-0.63, -0.63, 0.63] },
+                    { el: "H", pos: [-0.63, 0.63, -0.63] },
+                    { el: "H", pos: [0.63, -0.63, -0.63] }
+                ],
+                bonds: [[0, 1], [0, 2], [0, 3], [0, 4]]
+            },
+            "Etanol (C2H5OH)": {
+                desc: "Tibbiyotda va sanoatda keng qo'llaniladigan spirt.",
+                atoms: [
+                    { el: "C", pos: [-1.2, 0, 0] }, // C1
+                    { el: "C", pos: [0.2, 0, 0] },  // C2
+                    { el: "O", pos: [0.9, 1.2, 0] }, // O
+                    { el: "H", pos: [-1.5, 1.0, 0] },
+                    { el: "H", pos: [-1.5, -0.5, 0.9] },
+                    { el: "H", pos: [-1.5, -0.5, -0.9] },
+                    { el: "H", pos: [0.5, -0.5, 0.9] },
+                    { el: "H", pos: [0.5, -0.5, -0.9] },
+                    { el: "H", pos: [1.8, 1.0, 0] }
+                ],
+                bonds: [[0,1], [1,2], [0,3], [0,4], [0,5], [1,6], [1,7], [2,8]]
+            },
+            "Aspirin (C9H8O4)": {
+                desc: "Og'riq qoldiruvchi va yallig'lanishga qarshi vosita.",
+                atoms: [
+                    // Benzol halqasi va yon zanjirlar (taxminiy 3D tuzilishi)
+                    { el: "C", pos: [0, 0, 0] }, { el: "C", pos: [1.4, 0, 0] },
+                    { el: "C", pos: [2.1, 1.2, 0] }, { el: "C", pos: [1.4, 2.4, 0] },
+                    { el: "C", pos: [0, 2.4, 0] }, { el: "C", pos: [-0.7, 1.2, 0] },
+                    { el: "O", pos: [3.5, 1.2, 0] }, { el: "C", pos: [4.2, 2.4, 0] }, // Ester guruhi
+                    { el: "O", pos: [3.5, 3.6, 0] }, { el: "C", pos: [5.6, 2.4, 0] },
+                    { el: "C", pos: [-2.2, 1.2, 0] }, { el: "O", pos: [-2.9, 0, 0] }, { el: "O", pos: [-2.9, 2.4, 0] } // Karboksil
+                ],
+                bonds: [[0,1], [1,2], [2,3], [3,4], [4,5], [5,0], [2,6], [6,7], [7,8], [7,9], [5,10], [10,11], [10,12]]
+            }
+        };
+
+        // Atom Ranglari va O'lchamlari (CPK standarti)
+        const ELEMENT_STYLES = {
+            "H": { color: 0xFFFFFF, size: 0.25 }, // Oq
+            "C": { color: 0x333333, size: 0.4 },  // Qora
+            "O": { color: 0xFF0000, size: 0.4 },  // Qizil
+            "N": { color: 0x0000FF, size: 0.4 },  // Ko'k
+            "DEFAULT": { color: 0xFF00FF, size: 0.4 }
+        };
+
+        // ==========================================
+        // 2. SAHNA SOZLAMALARI
+        // ==========================================
+        let scene, camera, renderer, labelRenderer, controls;
+        let rootGroup; // Molekula shu guruhga yig'iladi
+
+        init();
+        animate();
+
+        function init() {
+            // Sahna
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
+            // Chuqurlik effekti (Tuman)
+            scene.fog = new THREE.Fog(0x111111, 20, 100);
+
+            // Kamera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 15);
+
+            // Yoritish (Chiroyli ko'rinish uchun 3 ta chiroq)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            dirLight.position.set(10, 10, 10);
+            scene.add(dirLight);
+
+            const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            backLight.position.set(-10, -5, -10);
+            scene.add(backLight);
+
+            // Asosiy guruh
+            rootGroup = new THREE.Group();
+            scene.add(rootGroup);
+
+            // 1. WebGL Renderer (3D jismlar uchun)
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // 2. CSS2D Renderer (Matn yozuvlari uchun)
+            labelRenderer = new CSS2DRenderer();
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0px';
+            labelRenderer.domElement.style.pointerEvents = 'none'; // Bosish o'tishi uchun
+            document.body.appendChild(labelRenderer.domElement);
+
+            // Boshqaruv (Aylantirish/Yaqinlashtirish)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // UI ni ishga tushirish
+            setupUI();
+
+            // Oyna o'zgarganda
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // ==========================================
+        // 3. MOLEKULA YARATISH LOGIKASI
+        // ==========================================
+        
+        function buildMolecule(name) {
+            // Eskisini tozalash
+            while(rootGroup.children.length > 0){ 
+                rootGroup.remove(rootGroup.children[0]); 
+            }
+            // Eski yozuvlarni HTMLdan tozalash
+            const labels = document.querySelectorAll('.atom-label');
+            labels.forEach(el => el.remove()); // Xavfsizlik uchun
+
+            const data = MOLECULES[name];
+            if(!data) return;
+
+            // Markazni topish (Molekula o'rtada turishi uchun)
+            const center = new THREE.Vector3();
+            data.atoms.forEach(a => center.add(new THREE.Vector3(...a.pos)));
+            center.divideScalar(data.atoms.length);
+
+            const atomMeshes = []; // Bog'lanishlar uchun saqlab turamiz
+
+            // --- ATOMLAR ---
+            data.atoms.forEach(atomData => {
+                const style = ELEMENT_STYLES[atomData.el] || ELEMENT_STYLES["DEFAULT"];
+                
+                // Geometriya va Material (Plastik/Shisha effekt)
+                const geometry = new THREE.SphereGeometry(style.size, 32, 32);
+                const material = new THREE.MeshPhysicalMaterial({
+                    color: style.color,
+                    roughness: 0.2,  // Yaltiroqlik
+                    metalness: 0.1,
+                    clearcoat: 0.8,  // Lak qatlami
+                    clearcoatRoughness: 0.1
+                });
+
+                const sphere = new THREE.Mesh(geometry, material);
+                // Koordinatani to'g'irlash
+                sphere.position.set(...atomData.pos).sub(center).multiplyScalar(2); // x2 kattalashtirish
+                
+                rootGroup.add(sphere);
+                atomMeshes.push(sphere);
+
+                // Yozuv (Label)
+                const div = document.createElement('div');
+                div.className = 'atom-label';
+                div.textContent = atomData.el;
+                div.style.color = (atomData.el === 'H' || atomData.el === 'Ag') ? 'black' : 'white';
+                
+                const label = new CSS2DObject(div);
+                label.position.set(0, 0, 0);
+                sphere.add(label);
+            });
+
+            // --- BOG'LANISHLAR (BONDS) ---
+            if(data.bonds) {
+                data.bonds.forEach(pair => {
+                    const start = atomMeshes[pair[0]].position;
+                    const end = atomMeshes[pair[1]].position;
+                    createBond(start, end);
+                });
+            }
+        }
+
+        // Ikki nuqta orasiga truba (bond) chizish funksiyasi
+        function createBond(pos1, pos2) {
+            const distance = pos1.distanceTo(pos2);
+            const geometry = new THREE.CylinderGeometry(0.1, 0.1, distance, 12);
+            const material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
+            
+            const cylinder = new THREE.Mesh(geometry, material);
+            
+            // O'rtaga qo'yamiz
+            const mid = new THREE.Vector3().addVectors(pos1, pos2).multiplyScalar(0.5);
+            cylinder.position.copy(mid);
+            
+            // To'g'ri burchakka buramiz
+            cylinder.lookAt(pos2);
+            cylinder.rotateX(Math.PI / 2); // Three.js da tsilindr tik turadi, uni yotqizamiz
+
+            rootGroup.add(cylinder);
+        }
+
+        // ==========================================
+        // 4. UI LOGIKASI
+        // ==========================================
+        function setupUI() {
+            const select = document.getElementById('molecule-select');
+            const desc = document.getElementById('molecule-desc');
+
+            Object.keys(MOLECULES).forEach(key => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = key;
+                select.appendChild(opt);
+            });
+
+            // O'zgarganda chizish
+            select.addEventListener('change', (e) => {
+                const key = e.target.value;
+                buildMolecule(key);
+                desc.textContent = MOLECULES[key].desc;
+            });
+
+            // Boshlanishida birinchisini chizish
+            const first = Object.keys(MOLECULES)[0];
+            buildMolecule(first);
+            desc.textContent = MOLECULES[first].desc;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+</html>

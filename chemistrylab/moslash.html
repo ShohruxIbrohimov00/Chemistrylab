@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smartboard Logic Lab - Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Asosiy sozlamalar */
+        * { 
+            touch-action: none; 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent;
+            user-select: none; 
+            -webkit-user-select: none; 
+        }
+        
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #050b14;
+            height: 100vh;
+            width: 100vw;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        /* Konteynerlar - Mobil va Desktop uchun moslashuvchan */
+        #app-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            /* Mobil uchun: 110px chap, bo'shliq, 110px o'ng */
+            grid-template-columns: 110px 1fr 110px; 
+            padding: 10px;
+            z-index: 10;
+        }
+
+        @media (min-width: 768px) {
+            #app-container {
+                grid-template-columns: 250px 1fr 250px;
+                padding: 20px 40px;
+            }
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around; 
+            height: 100%;
+            padding: 70px 0 30px 0;
+        }
+
+        /* Karta dizayni */
+        .card {
+            position: relative;
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 70px; 
+            width: 100%;
+            transition: all 0.2s ease;
+        }
+
+        @media (min-width: 768px) {
+            .card { height: 80px; border-radius: 16px; }
+        }
+
+        /* Effektlar */
+        .card.correct { border-color: #10b981; background: rgba(16, 185, 129, 0.2); }
+        .card.wrong { border-color: #ef4444; animation: shake 0.4s; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* Matnlar */
+        .q-text { font-size: 0.85rem; font-weight: 600; color: #e2e8f0; text-align: center; }
+        .a-text { font-size: 1.1rem; font-weight: 800; color: #818cf8; text-align: center; }
+
+        @media (min-width: 768px) {
+            .q-text { font-size: 1.2rem; }
+            .a-text { font-size: 1.8rem; }
+        }
+
+        /* Connectorlar */
+        .connector {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: #6366f1;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 20;
+        }
+        .conn-right { right: -7px; }
+        .conn-left { left: -7px; }
+
+        /* UI Paneli */
+        .header-ui {
+            position: absolute;
+            top: 15px; left: 0; right: 0;
+            display: flex; justify-content: center;
+            gap: 8px; z-index: 50;
+        }
+        .badge {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 12px;
+            border-radius: 20px;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-ui">
+        <div class="badge">Kimyo</div>
+        <div class="badge">Ball: <span id="score" class="text-emerald-400">0</span></div>
+        <button onclick="location.reload()" class="badge bg-indigo-900">🔄</button>
+    </div>
+
+    <div id="app-container">
+        <div class="column" id="col-questions"></div>
+        <div class="column"></div> <div class="column" id="col-answers"></div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.169.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const data = [
+            { id: 1, q: "Vodorod", a: "H" },
+            { id: 2, q: "Kislorod", a: "O" },
+            { id: 3, q: "Natriy", a: "Na" },
+            { id: 4, q: "Oltin", a: "Au" },
+            { id: 5, q: "Temir", a: "Fe" }
+        ];
+
+        let score = 0;
+        let connections = [];
+        let tempLine = null;
+
+        // UI yaratish
+        const qCol = document.getElementById('col-questions');
+        const aCol = document.getElementById('col-answers');
+
+        data.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'card';
+            el.dataset.id = item.id;
+            el.dataset.type = 'question';
+            el.innerHTML = `<span class="q-text">${item.q}</span><div class="connector conn-right"></div>`;
+            qCol.appendChild(el);
+        });
+
+        [...data].sort(() => Math.random() - 0.5).forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'card';
+            el.dataset.id = item.id;
+            el.dataset.type = 'answer';
+            el.innerHTML = `<div class="connector conn-left"></div><span class="a-text">${item.a}</span>`;
+            aCol.appendChild(el);
+        });
+
+        // Three.js Sozlamalari
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(window.innerWidth/-2, window.innerWidth/2, window.innerHeight/2, window.innerHeight/-2, 1, 1000);
+        camera.position.z = 10;
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const plasmaVertex = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
+        const plasmaFragment = `uniform float time; uniform vec3 color; varying vec2 vUv; void main() { float dash = sin(vUv.x * 15.0 - time * 5.0); float glow = 1.0 - abs(vUv.y - 0.5) * 2.0; gl_FragColor = vec4(color * 1.5, glow * (0.4 + 0.6 * dash)); }`;
+
+        function getAnchorPoint(el, type) {
+            const rect = el.getBoundingClientRect();
+            const x = type === 'question' ? rect.right : rect.left;
+            const y = rect.top + rect.height / 2;
+            return new THREE.Vector3(x - window.innerWidth/2, (y - window.innerHeight/2) * -1, 0);
+        }
+
+        function createGlowingLine(start, end, colorHex) {
+            const dist = start.distanceTo(end);
+            const cp1 = new THREE.Vector3(start.x + dist * 0.3, start.y, 0);
+            const cp2 = new THREE.Vector3(end.x - dist * 0.3, end.y, 0);
+            const curve = new THREE.CubicBezierCurve3(start, cp1, cp2, end);
+            const thickness = window.innerWidth < 768 ? 2 : 3;
+            const geometry = new THREE.TubeGeometry(curve, 32, thickness, 8, false);
+            const material = new THREE.ShaderMaterial({
+                uniforms: { time: { value: 0 }, color: { value: new THREE.Color(colorHex) } },
+                vertexShader: plasmaVertex, fragmentShader: plasmaFragment,
+                transparent: true, blending: THREE.AdditiveBlending, depthTest: false
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+            return { mesh, material, geometry };
+        }
+
+        // Eventlar
+        let isDragging = false, activeCard = null, startPoint = null;
+
+        const startDrag = (e) => {
+            const card = e.target.closest('.card');
+            if (!card || card.dataset.type !== 'question' || card.classList.contains('correct')) return;
+            isDragging = true; activeCard = card;
+            startPoint = getAnchorPoint(card, 'question');
+        };
+
+        const moveDrag = (e) => {
+            if (!isDragging) return;
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
+            const endPoint = new THREE.Vector3(x - window.innerWidth/2, (y - window.innerHeight/2) * -1, 0);
+            
+            if (tempLine) { scene.remove(tempLine.mesh); tempLine.geometry.dispose(); }
+            tempLine = createGlowingLine(startPoint, endPoint, 0x818cf8);
+        };
+
+        const endDrag = (e) => {
+            if (!isDragging) return;
+            const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+            const y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+            const target = document.elementFromPoint(x, y)?.closest('.card');
+
+            if (tempLine) { scene.remove(tempLine.mesh); tempLine = null; }
+
+            if (target && target.dataset.type === 'answer' && target.dataset.id === activeCard.dataset.id) {
+                score += 10;
+                document.getElementById('score').innerText = score;
+                activeCard.classList.add('correct');
+                target.classList.add('correct');
+                connections.push(createGlowingLine(startPoint, getAnchorPoint(target, 'answer'), 0x10b981));
+            } else if (target && target.dataset.type === 'answer') {
+                target.classList.add('wrong');
+                setTimeout(() => target.classList.remove('wrong'), 400);
+            }
+            isDragging = false; activeCard = null;
+        };
+
+        const app = document.getElementById('app-container');
+        app.addEventListener('mousedown', startDrag);
+        app.addEventListener('touchstart', startDrag);
+        document.addEventListener('mousemove', moveDrag);
+        document.addEventListener('touchmove', moveDrag, { passive: false });
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+
+        // Animatsiya
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            connections.forEach(c => c.material.uniforms.time.value = time);
+            if (tempLine) tempLine.material.uniforms.time.value = time * 1.5;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.left = window.innerWidth/-2; camera.right = window.innerWidth/2;
+            camera.top = window.innerHeight/2; camera.bottom = window.innerHeight/-2;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
