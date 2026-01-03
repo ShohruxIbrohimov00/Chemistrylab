@@ -54,7 +54,7 @@ scene.add(floor);
 
 // GLTF modelini yuklash
 const loader = new GLTFLoader();
-loader.load('chemistrylab/models/chemistry_bottles.glb', (gltf) => {
+loader.load('./chemistrylab/models/chemistry_bottles.glb', (gltf) => {
     const model = gltf.scene;
 
     // Modelni markazlashtirish
