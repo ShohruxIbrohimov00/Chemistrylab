@@ -68,7 +68,7 @@ const params = {
 };
 
 const loader = new GLTFLoader();
-loader.load('models/chemistry_bottles.glb', (gltf) => {
+loader.load('chemistrylab/models/chemistry_bottles.glb', (gltf) => {
     const model = gltf.scene;
     model.traverse((child) => {
         if (child.isMesh) {
